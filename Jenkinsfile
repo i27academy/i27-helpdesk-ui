@@ -2,6 +2,9 @@ pipeline {
     agent {
         label 'my-slave'
     }
+    parameters {
+        booleanParam(name: 'BUILD', defaultValue: true, description: "Run buid and push image")
+    }
     environment {
         // Currently i am using docker hub registry
         REGISTRY_URL = "docker.io"
@@ -14,6 +17,11 @@ pipeline {
     }
     stages {
         stage ('Prepare Tag') {
+            when {
+                expression {
+                    return params.BUILD
+                }
+            }
             steps {
                 script {
                 // Construct a full image with complete image name 
@@ -28,11 +36,17 @@ pipeline {
 
             }
         }
-        // stage('Build Docker Image') {
-        //     steps {
-        //         sh "docker build -t  ${env.IMAGE_NAME}:${GIT_COMMIT} --build-arg NEXT_PUBLIC_API_BASE_URL=http://34.121.17.29:8080 ."
-        //     }
-        // }
+        stage('Build Docker Image') {
+            when {
+                expression {
+                    return params.BUILD
+                }
+            }
+            steps {
+                echo "Building the image"
+                //sh "docker build -t  ${env.IMAGE_NAME}:${GIT_COMMIT} --build-arg NEXT_PUBLIC_API_BASE_URL=http://34.9.152.246:8080 ."
+            }
+        }
     }
 }
 

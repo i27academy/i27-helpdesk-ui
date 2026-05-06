@@ -4,6 +4,7 @@ pipeline {
     }
     parameters {
         booleanParam(name: 'BUILD', defaultValue: true, description: "Run buid and push image")
+        choice(name: 'TARGET_ENV', choices: ['dev', 'test', 'stage', 'prod'], description: 'Target environment for API url')
     }
     environment {
         // Currently i am using docker hub registry
@@ -27,6 +28,22 @@ pipeline {
                 // Construct a full image with complete image name 
                 env.IMAGE_NAME = env.REGISTRY_URL + "/" + env.IMAGE_REPOSITORY 
 
+                // Setting the gateway url on the TARGET_ENV selection
+                switch(params.TARGET_ENV)  {
+                    case 'dev': 
+                        env.NEXT_PUBLIC_API_BASE_URL = 'http://34.9.152.246:8080'
+                        break
+                    case 'test': 
+                        env.NEXT_PUBLIC_API_BASE_URL = 'http://test-gateway.i27helpdesk.in'
+                        break
+                    case 'stage':
+                        env.NEXT_PUBLIC_API_BASE_URL = 'http://stage-gateway.i27helpdesk.in'
+                        break
+                    case 'prod'
+                        env.NEXT_PUBLIC_API_BASE_URL = 'http://gateway.i27helpdesk.in'
+                        break
+                }
+
                 echo "Using Registry: ${env.REGISTRY_URL}"
                 echo "Using Repository: ${env.IMAGE_REPOSITORY}"
                 echo "Using Image Tag: ${GIT_COMMIT}"
@@ -44,7 +61,7 @@ pipeline {
             }
             steps {
                 echo "Building the image"
-                //sh "docker build -t  ${env.IMAGE_NAME}:${GIT_COMMIT} --build-arg NEXT_PUBLIC_API_BASE_URL=http://34.9.152.246:8080 ."
+                sh "docker build -t  ${env.IMAGE_NAME}:${GIT_COMMIT} --build-arg NEXT_PUBLIC_API_BASE_URL=${env.NEXT_PUBLIC_API_BASE_URL} ."
             }
         }
     }

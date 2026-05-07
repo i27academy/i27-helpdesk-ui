@@ -78,6 +78,20 @@ pipeline {
                     // we need to have sonar-scanner plugin installed on jenkins 
             }
         }
+        stage ('Quality Gate') {
+            when {
+                expression {
+                    return params.BUILD
+                }
+            }
+            steps {
+                timeout(time: 2, unit: 'MINUTES') {
+                    script {
+                        waitForQualityGate abortPipeline: true
+                    }
+                }
+            }
+        }
         stage('Build Docker Image') {
             when {
                 expression {
@@ -101,6 +115,17 @@ pipeline {
                 echo "********************************* Docker Push *****************************"
                 sh "docker push ${env.IMAGE_NAME}:${GIT_COMMIT}"
             }
+        }
+    }
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            echo 'Pipeline Completed Succesfully'
+        }
+        failure {
+            echo 'Pipeline Failed, check jenkins logs'
         }
     }
 }

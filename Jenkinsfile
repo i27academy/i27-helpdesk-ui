@@ -1,6 +1,7 @@
 pipeline {
     agent {
-        label 'my-slave'
+        // label 'my-slave'
+        label 'k8s-slave'
     }
     parameters {
         booleanParam(name: 'BUILD', defaultValue: true, description: "Run buid and push image")
@@ -17,6 +18,11 @@ pipeline {
 
         // docker.io/devopswithcloudhub/i27-helpdesk-ui:tagname
         // docker.io/devopswithcloudhub/i27-helpdesk-ui:84285da
+
+        // Kubernetes Dev Cluster Details 
+        DEV_CLUSTER_NAME = "np-cluster"
+        DEV_CLUSTER_ZONE = "us-east4-a"
+        DEV_PROJECT_ID = "project-fe6816d0-c7fc-4c9b-bd7"
  
     }
     stages {
@@ -117,6 +123,41 @@ pipeline {
                 sh "docker push ${env.IMAGE_NAME}:${GIT_COMMIT}"
             }
         }
+        stage ('GKE Auth') {
+            when {
+                expression {
+                    return params.TARGET_ENV == 'dev'
+                }
+            }
+            steps {
+                script {
+                    sh """
+                        echo "******************************* Authenticating to GKE **************************"
+                        gcloud container clusters get-credentials ${env.DEV_CLUSTER_NAME} --zone ${env.DEV_CLUSTER_ZONE} --project ${env.DEV_PROJECT_ID}
+
+                        echo "******************** Validating the Cluster access *********************"
+                        kubectl get nodes
+                    """
+                }
+            }
+        }
+        // stage ('DeployToDevEnvironment'){
+        //     // GKE Cluster should be available - done
+        //     // kubectl should be availble - done
+        //     // slave should be having config file to connect to our api server - done 
+        //     // Create k8s manifests file and make them apply into our namespaces
+        //     // Create a reusable code for all environments 
+        //     when {
+        //         expression {
+        //             return params.BUILD
+        //         }
+        //     }
+        //     steps {
+        //         script {
+
+        //         }
+        //     }
+        // }
     }
     post {
         always {

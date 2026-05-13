@@ -217,9 +217,14 @@ pipeline {
         }
         stage ('DeployToStageEnvironment'){
             when {
-                expression {
-                    return params.BUILD && params.TARGET_ENV == 'stage'
+                allOf {
+                    expression { return params.BUILD && params.TARGET_ENV == 'stage' }
+                    anyOf {
+                        branch 'release*'
+                        tag pattern: "v\\d{1,2}\\.\\d{1,2}\\.\\d{1,2}", comparator: "REGEXP"
+                    }
                 }
+
             }
             steps {
                 script {
@@ -230,9 +235,16 @@ pipeline {
         }
         stage ('DeployToProdEnvironment'){
             when {
-                expression {
-                    return params.BUILD && params.TARGET_ENV == 'prod'
+                allOf {
+                    expression {return params.BUILD && params.TARGET_ENV == 'prod'}
+                    // v1.2.3
+                    //v.1.2.3
+                    anyOf {
+                        //v1.2.3
+                        tag pattern: "v\\d{1,2}\\.\\d{1,2}\\.\\d{1,2}", comparator: "REGEXP"
+                    }
                 }
+
             }
             steps {
                 script {

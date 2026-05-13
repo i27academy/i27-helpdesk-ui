@@ -1,3 +1,27 @@
+def deployToEnv(String namespace, String envLabel) {
+    env.NAMESPACE = namespace
+    sh '''
+        echo "******************* Deploying to ${envLabel} Environment *********************"
+        echo "Deploying into this namespace: ${NAMESPACE}"
+        kubectl get pods -n ${NAMESPACE}
+        # Substitute variables in kubernetes manifests
+        sed -i "s|\\${NAMESPACE}|${NAMESPACE}|g" k8s/*.yaml
+        sed -i "s|\\${IMAGE_NAME}|${IMAGE_NAME}|g" k8s/deploy.yaml
+        sed -i "s|\\${IMAGE_TAG}|${GIT_COMMIT}|g" k8s/deploy.yaml
+        echo "Applying k8s manifests in ${envLabel} namespace"
+        kubectl apply -f k8s/
+        echo "Deployment to ${envLabel} namespace is completed"
+    '''
+
+}
+def gkeAuth(String clusterName, String zone, String projectId){
+    sh '''
+        echo "******************************* Authenticating to GKE **************************"
+        gcloud container clusters get-credentials ${clusterName} --zone ${zone} --project ${projectId}
+        echo "******************** Validating the Cluster access *********************"
+        kubectl get nodes
+    '''
+}
 pipeline {
     agent {
         // label 'my-slave'
@@ -5,7 +29,7 @@ pipeline {
     }
     parameters {
         booleanParam(name: 'BUILD', defaultValue: true, description: "Run buid and push image")
-        choice(name: 'TARGET_ENV', choices: ['dev', 'test', 'stage', 'prod'], description: 'Target environment for API url')
+        choice(name: 'TARGET_ENV', choices: ['n/a','dev', 'test', 'stage', 'prod'], description: 'Target environment for API url')
         booleanParam(name: 'SKIP_SONAR', defaultValue: false, description: 'Skip SonarQube analysis and Quality gate')
     }
     environment {
@@ -23,6 +47,22 @@ pipeline {
         DEV_CLUSTER_NAME = "np-cluster"
         DEV_CLUSTER_ZONE = "us-east4-a"
         DEV_PROJECT_ID = "project-fe6816d0-c7fc-4c9b-bd7"
+
+        // Kubernetes Test Cluster Details 
+        TEST_CLUSTER_NAME = "np-cluster"
+        TEST_CLUSTER_ZONE = "us-east4-a"
+        TEST_PROJECT_ID = "project-fe6816d0-c7fc-4c9b-bd7"
+
+        // Kubernetes Stage Cluster Details 
+        STAGE_CLUSTER_NAME = "np-cluster"
+        STAGE_CLUSTER_ZONE = "us-east4-a"
+        STAGE_PROJECT_ID = "project-fe6816d0-c7fc-4c9b-bd7"
+
+        // Kubernetes Prod Cluster Details 
+        PROD_CLUSTER_NAME = "np-cluster"
+        PROD_CLUSTER_ZONE = "us-east4-a"
+        PROD_PROJECT_ID = "project-fe6816d0-c7fc-4c9b-bd7"
+
  
     }
     stages {
@@ -123,24 +163,24 @@ pipeline {
                 sh "docker push ${env.IMAGE_NAME}:${GIT_COMMIT}"
             }
         }
-        stage ('GKE Auth') {
-            when {
-                expression {
-                    return params.TARGET_ENV == 'dev'
-                }
-            }
-            steps {
-                script {
-                    sh """
-                        echo "******************************* Authenticating to GKE **************************"
-                        gcloud container clusters get-credentials ${env.DEV_CLUSTER_NAME} --zone ${env.DEV_CLUSTER_ZONE} --project ${env.DEV_PROJECT_ID}
+        // stage ('GKE Auth') {
+        //     when {
+        //         expression {
+        //             return params.TARGET_ENV == 'dev'
+        //         }
+        //     }
+        //     steps {
+        //         script {
+        //             sh """
+        //                 echo "******************************* Authenticating to GKE **************************"
+        //                 gcloud container clusters get-credentials ${env.DEV_CLUSTER_NAME} --zone ${env.DEV_CLUSTER_ZONE} --project ${env.DEV_PROJECT_ID}
 
-                        echo "******************** Validating the Cluster access *********************"
-                        kubectl get nodes
-                    """
-                }
-            }
-        }
+        //                 echo "******************** Validating the Cluster access *********************"
+        //                 kubectl get nodes
+        //             """
+        //         }
+        //     }
+        // }
         stage ('DeployToDevEnvironment'){
             // GKE Cluster should be available - done
             // kubectl should be availble - done
@@ -154,20 +194,11 @@ pipeline {
             }
             steps {
                 script {
-                    env.NAMESPACE = 'i27-helpdesk-dev'
-                    sh '''
-                        echo "******************* Deploying to Dev Environment *********************"
-                        echo "Deploying into this namespace: ${NAMESPACE}"
-                        kubectl get pods -n ${NAMESPACE}
-                        # Substitute variables in kubernetes manifests
-                        sed -i "s|\\${NAMESPACE}|${NAMESPACE}|g" k8s/*.yaml
-                        sed -i "s|\\${IMAGE_NAME}|${IMAGE_NAME}|g" k8s/deploy.yaml
-                        sed -i "s|\\${IMAGE_TAG}|${GIT_COMMIT}|g" k8s/deploy.yaml
-                        echo "Applying k8s manifests in dev namespace"
-                        kubectl apply -f k8s/
-                        echo "Deployment to Dev namespace is completed"
-
-                    '''
+                    // Calling Auth method
+                    // String clusterName, String zone, String projectId
+                    gkeAuth(env.DEV_CLUSTER_NAME, env.DEV_CLUSTER_ZONE, env.DEV_PROJECT_ID)
+                    // Calling deployToEnv method
+                    deployToEnv('i27-helpdesk-dev', 'Dev')
                 }
             }
         }
@@ -179,20 +210,8 @@ pipeline {
             }
             steps {
                 script {
-                    env.NAMESPACE = 'i27-helpdesk-test'
-                    sh '''
-                        echo "******************* Deploying to Test Environment *********************"
-                        echo "Deploying into this namespace: ${NAMESPACE}"
-                        kubectl get pods -n ${NAMESPACE}
-                        # Substitute variables in kubernetes manifests
-                        sed -i "s|\\${NAMESPACE}|${NAMESPACE}|g" k8s/*.yaml
-                        sed -i "s|\\${IMAGE_NAME}|${IMAGE_NAME}|g" k8s/deploy.yaml
-                        sed -i "s|\\${IMAGE_TAG}|${GIT_COMMIT}|g" k8s/deploy.yaml
-                        echo "Applying k8s manifests in dev namespace"
-                        kubectl apply -f k8s/
-                        echo "Deployment to Dev namespace is completed"
-
-                    '''
+                    gkeAuth(env.TEST_CLUSTER_NAME, env.TEST_CLUSTER_ZONE, env.TEST_PROJECT_ID)
+                    deployToEnv('i27-helpdesk-test', 'Test')
                 }
             }
         }
@@ -204,20 +223,8 @@ pipeline {
             }
             steps {
                 script {
-                    env.NAMESPACE = 'i27-helpdesk-stage'
-                    sh '''
-                        echo "******************* Deploying to stage Environment *********************"
-                        echo "Deploying into this namespace: ${NAMESPACE}"
-                        kubectl get pods -n ${NAMESPACE}
-                        # Substitute variables in kubernetes manifests
-                        sed -i "s|\\${NAMESPACE}|${NAMESPACE}|g" k8s/*.yaml
-                        sed -i "s|\\${IMAGE_NAME}|${IMAGE_NAME}|g" k8s/deploy.yaml
-                        sed -i "s|\\${IMAGE_TAG}|${GIT_COMMIT}|g" k8s/deploy.yaml
-                        echo "Applying k8s manifests in dev namespace"
-                        kubectl apply -f k8s/
-                        echo "Deployment to Dev namespace is completed"
-
-                    '''
+                    gkeAuth(env.STAGE_CLUSTER_NAME, env.STAGE_CLUSTER_ZONE, env.STAGE_PROJECT_ID)
+                    deployToEnv('i27-helpdesk-stage', 'Stage')
                 }
             }
         }
@@ -229,20 +236,8 @@ pipeline {
             }
             steps {
                 script {
-                    env.NAMESPACE = 'i27-helpdesk-prod'
-                    sh '''
-                        echo "******************* Deploying to prod Environment *********************"
-                        echo "Deploying into this namespace: ${NAMESPACE}"
-                        kubectl get pods -n ${NAMESPACE}
-                        # Substitute variables in kubernetes manifests
-                        sed -i "s|\\${NAMESPACE}|${NAMESPACE}|g" k8s/*.yaml
-                        sed -i "s|\\${IMAGE_NAME}|${IMAGE_NAME}|g" k8s/deploy.yaml
-                        sed -i "s|\\${IMAGE_TAG}|${GIT_COMMIT}|g" k8s/deploy.yaml
-                        echo "Applying k8s manifests in dev namespace"
-                        kubectl apply -f k8s/
-                        echo "Deployment to Dev namespace is completed"
-
-                    '''
+                    gkeAuth(env.PROD_CLUSTER_NAME, env.PROD_CLUSTER_ZONE, env.PROD_PROJECT_ID)
+                    deployToEnv('i27-helpdesk-prod', 'Prod')
                 }
             }
         }
